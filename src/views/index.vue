@@ -1,21 +1,40 @@
 <template>
   <div>
-    <h1>Realtime communication with WebRTC</h1>
-    <v-btn 
-    v-for="(username, index) in usernames" 
-    :key="index" 
-    block
-    @click="call(username)">
-      {{username}}
-    </v-btn>
-    <div v-if="callFrom !==''">
-      {{callFrom}}
-      <v-btn @click="accept()">接听</v-btn>
-      <v-btn @click="refuse()">挂断</v-btn>
-    </div>
+    <v-card color="grey lighten-4" flat>
+      <v-toolbar color="primary" dark>
+        <v-toolbar-title>音视频聊天室</v-toolbar-title>
+        <v-spacer></v-spacer>
+        <v-btn icon>
+          <v-icon>search</v-icon>
+        </v-btn>
+      </v-toolbar>
+    </v-card>
+
+    <v-list subheader>
+      <v-subheader>当前局域网内在线用户</v-subheader>
+      <v-list-tile
+        v-for="(username, index) in usernames" 
+        :key="index"
+        avatar
+        @click="tryCall(username)"
+      >
+        <v-list-tile-avatar>
+          <user-avatar :i="index" :word="username[0]"></user-avatar>
+        </v-list-tile-avatar>
+        <v-list-tile-content>
+          <v-list-tile-title v-html="username"></v-list-tile-title>
+        </v-list-tile-content>
+        <v-list-tile-action>
+          <v-icon color="success">phone</v-icon>
+        </v-list-tile-action>
+        <v-list-tile-action>
+          <v-icon color="success">video_call</v-icon>
+        </v-list-tile-action>
+      </v-list-tile>
+    </v-list>
 
     <video id="localVideo" autoplay playsinline></video>
-    <video id="remoteVideo" autoplay playsinline></video>
+    <video v-if="isLinked" id="remoteVideo"  autoplay playsinline></video>
 
     <div>
       <button @click="start()">Start</button>
@@ -28,11 +47,15 @@
 
 <script>
 /* eslint-disable*/
-import {trace} from '@/main.js'
+import {trace, sleep} from '@/main.js'
+import userAvatar from '@/components/userAvatar'
 import axios from 'axios'
 import * as _ from 'lodash'
 // import axios from 'axios'
 export default {
+  components: {
+    userAvatar
+  },
   data () {
     return {
       sharetoken: '',
@@ -44,8 +67,8 @@ export default {
       socket: '',
       stompClient: '',
       usernames: [],
-      callFrom: '',
       targetUsername: '',
+      isLinked: false,
     }
   },
   computed: {
@@ -59,7 +82,10 @@ export default {
       this.$router.replace('/login')
       return
     }
+    
     this.socketConnect()
+    await _self.start()
+    await _self.callAction()
     setTimeout(this.broad,3000)
   },
   methods: {
@@ -69,7 +95,7 @@ export default {
       this.stomp = Stomp.over(this.sock)
       _self.stomp.connect('guest', 'guest', function(frame) {
         console.log(frame)
-        _self.stomp.subscribe("/user/queue/notifications", (message) => {
+        _self.stomp.subscribe("/user/queue/notifications", async (message) => {
           const messageBody = eval('(' + message.body + ')')
           // const description = messageBody.content
           if(messageBody.type === 'send') {
@@ -77,12 +103,24 @@ export default {
             _self.createAnswer(description, messageBody.from)
           }
           else if(messageBody.type === 'tryCall') {
-            _self.callFrom = messageBody.from
+            _self.stomp.send("/api/chat", {}, JSON.stringify({'username': messageBody.from,
+              'type': 'accept',
+              'content': ''  
+            }))
+            _self.isLinked = true
+            _self.call(message.body.from)
+            await sleep(1000)
+            // why call again? I dont konw. It doesnt work without twice call.
+            _self.call(messageBody.from)
           }
           else if(messageBody.type === 'accept') {
-            _self.link(messageBody.from)
+            _self.isLinked = true
+            _self.call(messageBody.from)
+            await sleep(1000)
+            // why call again? I dont konw. It doesnt work without twice call.
+            _self.call(messageBody.from)
           }
-          else {
+          else if(messageBody.type === 'match'){
             const description = eval('(' +messageBody.content + ')')
             _self.localPeerConnection.setRemoteDescription(description)
           }
@@ -105,42 +143,18 @@ export default {
       let _self = this 
       _self.stompClient.send("/api/entrance", {}, JSON.stringify());
     },
-
-    async call(targetUsername) {
+    async tryCall(targetUsername) {
       let _self = this
-      
-      _self.stomp.send("/api/chat", {}, JSON.stringify({
-        'username': targetUsername,
+      _self.targetUsername = targetUsername
+      _self.stomp.send("/api/chat", {}, JSON.stringify({'username': targetUsername,
         'type': 'tryCall',
-        'content':  ''
-      }))
-      // await _self.start()
-      // await _self.callAction()
-      // _self.createOffer(targetUsername)
-    },
-
-    async accept() {
-      let _self = this
-      await _self.start()
-      await _self.callAction()
-      _self.createOffer(_self.targetUsername)
-      _self.createOffer(_self.targetUsername)
-      _self.stomp.send("/api/chat", {}, JSON.stringify({
-        'username': _self.targetUsername,
-        'type': 'accept',
-        'content':  ''
+        'content': ''  
       }))
     },
-    async link(targetUsername) {
+    async call(targetUsername) {
+      console.log("call!!!!!!!!")
       let _self = this
-      await _self.start()
-      await _self.callAction()
       _self.createOffer(targetUsername)
-      // _self.stomp.send("/api/chat", {}, JSON.stringify({
-      //   'username': _self.targetUsername,
-      //   'type': 'accept',
-      //   'content':  ''
-      // }))
     },
 
     async start() {
@@ -204,7 +218,7 @@ export default {
         const iceCandidate = event.candidate;
 
         if (iceCandidate) {
-          const newIceCandidate = new RTCIceCandidate(iceCandidate);
+          const newIceCandidate = iceCandidate;
           const otherPeer = (peerConnection === _self.localPeerConnection) ? _self.remotePeerConnection : _self.localPeerConnection;
 
           otherPeer.addIceCandidate(newIceCandidate)
@@ -224,9 +238,7 @@ export default {
         trace(`${_self.getPeerName(peerConnection)} ICE state: ` + `${peerConnection.iceConnectionState}.`);
       });
       _self.remotePeerConnection.addEventListener('addstream', event => {
-        alert('addstream')
         const mediaStream = event.stream;
-        alert(mediaStream)
         _self.remoteVideo.srcObject = mediaStream;
         _self.remoteStream = mediaStream;
         trace('Remote peer connection received remote stream.');
@@ -251,9 +263,8 @@ export default {
         _self.localPeerConnection.setLocalDescription(description)
         console.log("send websocket")
         _self.stomp.send("/api/chat", {}, JSON.stringify({'username': targetUsername,
-          'type': 'send',
-          'content':  JSON.stringify(description)
-        }))
+        'type': 'send',
+        'content':  JSON.stringify(description)}))
       // })
     },
     createAnswer(description, from) {
@@ -275,11 +286,26 @@ export default {
         'content':  JSON.stringify(desc)}))
       })
     },
+    async hangUp() {
+      let _self = this
+      _self.localPeerConnection.close();
+      _self.remotePeerConnection.close();
+      _self.localPeerConnection = null;
+      _self.remotePeerConnection = null;
+      await _self.callAction()
+      _self.stomp.send("/api/chat", {}, JSON.stringify({'username': messageBody.from,
+        'type': 'hangUp',
+        'content': ''  
+      }))
+      _self.isLinked = false
+      trace('Ending call.');
+    },
     getPeerName(peerConnection) {
       let _self = this
       return (peerConnection === _self.localPeerConnection) ?
           'localPeerConnection' : 'remotePeerConnection';
     },
+    
   }
 }
 </script>
@@ -287,28 +313,6 @@ export default {
 <style lang="stylus">
 </style>
 <style lang="scss" scoped>
-@import '../jike-styles.scss';
-.entrance{
-  background-color: $color-grey-5;
-  width: 100%;
-  height: 150px;
-  border: 1px solid $color-grey-5;
-  .btn {
-    margin-top: 50px;
-    padding-top: 10px;
-    padding-bottom: 10px;
-    background-color: $color-jike-yellow;
-    width: 40%;
-    font-size: $font-heading-1-font-size;
-    line-height: $font-heading-1-line-height;
-    color: $font-heading-1-color;
-    letter-spacing: $font-heading-1-letter-spacing;
-    font-style: $font-heading-1-font-style;
-    font-weight: $font-heading-1-font-weight;
-    font-family: $font-heading-1-font-family; 
-    border-radius:25px;
-  }
-}  
 </style>
 
 

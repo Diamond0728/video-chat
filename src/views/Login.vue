@@ -1,6 +1,7 @@
 <template>
   <div>
     <div align="center" style="padding-top:50%; padding-left:40px; padding-right:40px;">
+<!--    <div align="center" style="padding-top:50%; padding-left:40px; padding-right:40px;"> -->
       <v-text-field
         label="为自己取一个响亮的名字吧"
         v-model="username"
@@ -42,7 +43,7 @@ export default {
       .then(response =>{
         if(response.data.success){
           _self.user.username = response.data.data.username
-          setTimeout(_self.jump,1000)
+          setTimeout(_self.jump,100)
         } else {
           alert(response.data.message)
           _self.loading = false

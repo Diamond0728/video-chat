@@ -19,3 +19,7 @@ export const trace = text => {
   console.log(now, text);
 }
 
+export const sleep =  ms =>  {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
