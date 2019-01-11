@@ -19,7 +19,8 @@
           <user-avatar :size="'small'" :i="index" :word="username[0]"></user-avatar>
         </v-list-tile-avatar>
         <v-list-tile-content>
-          <v-list-tile-title v-html="username"></v-list-tile-title>
+          <v-list-tile-title v-html="names[index]"></v-list-tile-title>
+          <v-list-tile-title v-html="`ip地址：${username}`"></v-list-tile-title>
         </v-list-tile-content>
         <v-list-tile-action>
           <v-icon color="success" @click="tryPhoneCall(username)">phone</v-icon>
@@ -56,7 +57,7 @@
         <div align="center">
           <user-avatar :size="'large'" :i="usernames.indexOf(targetUsername)" :word="targetUsername[0]"
           style="padding-top:100px;margin-bottom:200px;"></user-avatar>
-          <h2>等待{{targetUsername}}接受邀请</h2>
+          <h2>等待{{names[usernames.indexOf(targetUsername)]}}接受邀请</h2>
           <v-btn fab dark depressed color="error" @click="cancelCall()">
             挂断
           </v-btn>
@@ -85,7 +86,7 @@
       <div align="center" :style="`display:${isLinked && !option.video ? '': 'none'};`">
         <user-avatar :size="'large'" :i="usernames.indexOf(targetUsername)" :word="targetUsername[0]"
         style="padding-top:100px;margin-bottom:200px;"></user-avatar>
-        <h2>正在和{{targetUsername}}语音通话</h2>
+        <h2>正在和{{names[usernames.indexOf(targetUsername)]}}语音通话</h2>
       </div>
     </div>
 
@@ -93,7 +94,7 @@
       v-if="isLinked"
       style="
         position: absolute;
-        bottom: 100px;
+        bottom: 80px;
         left: 45%;
         z-index:999"
       @click="reject()">
@@ -126,6 +127,7 @@ export default {
       socket: '',
       stompClient: '',
       usernames: [],
+      names: [],
       targetUsername: '',
       isLinked: false,
       option: {
@@ -206,6 +208,8 @@ export default {
         _self.stompClient.subscribe("/topic/users/list", async function (msg) {//通过stopmClient.subscribe订阅"/topic/response"目标发送的消息，这个路径是在控制器的@SendTo中定义的
           const users = eval('(' + msg.body + ')')
           const newUsernames =  _.map(users, 'username')
+          const newNames =  _.map(users, 'name')
+          console.log(newNames)
           if(_self.isLinked && !(_self.targetUsername in newUsernames)){
             await _self.hangUp()
             _self.isLinked = false
@@ -213,6 +217,7 @@ export default {
             alert('对方挂断了电话')
           }
           _self.usernames = newUsernames
+          _self.names = newNames
           console.log(_self.usernames)
         });
       })
