@@ -85,23 +85,22 @@
 
       <div align="center" :style="`display:${isLinked && !option.video ? '': 'none'};`">
         <user-avatar :size="'large'" :i="usernames.indexOf(targetUsername)" :word="targetUsername[0]"
-        style="padding-top:100px;margin-bottom:200px;"></user-avatar>
+        style="padding-top:100px;margin-bottom:140px;"></user-avatar>
         <h2>正在和{{names[usernames.indexOf(targetUsername)]}}语音通话</h2>
       </div>
     </div>
-
-    <v-btn fab dark  depressed color="red" 
-      v-if="isLinked"
-      style="
-        position: absolute;
-        bottom: 80px;
-        left: 45%;
-        z-index:999"
-      @click="reject()">
-      <div icon>
-        <v-icon>call_end</v-icon>
-      </div>
-    </v-btn>
+    <div v-if="isLinked" align="center" style="
+      position: absolute;
+      bottom: 100px;
+      z-index:999;
+      width:100%">
+      <v-btn fab dark  depressed color="red" 
+        @click="reject()">
+        <div icon>
+          <v-icon>call_end</v-icon>
+        </div>
+      </v-btn>
+    </div>
   </div>
 </template>
 
@@ -139,7 +138,7 @@ export default {
   computed: {
     localVideo: () => document.getElementById("localVideo"),
     remoteVideo: () => document.getElementById("remoteVideo"),
-    screenHeight: () => document.body.offsetHeight
+    screenHeight: () => document.body.clientHeight
   },
   async mounted () {
     let _self = this
@@ -169,7 +168,15 @@ export default {
           else if(messageBody.type === 'tryCall') {
             _self.option = eval('(' +messageBody.content + ')')
             _self.targetUsername = messageBody.from
-            _self.askAccept = true
+            if(_self.isLinked) {
+              _self.stomp.send("/api/chat", {}, JSON.stringify({'username': _self.targetUsername,
+                'type': 'isLinked',
+                'content': ''  
+              }))
+            }
+            else {
+              _self.askAccept = true
+            }
           }
           else if(messageBody.type === 'accept') {
             _self.linking = false
@@ -184,6 +191,12 @@ export default {
             _self.linking = false
             _self.localStream.getVideoTracks()[0].stop()
             alert('对方拒接')
+          }
+          else if(messageBody.type === 'isLinked'){
+            await _self.hangUp()
+            _self.linking = false
+            _self.localStream.getVideoTracks()[0].stop()
+            alert('对方正在通话中，请稍后重试')
           }
           else if(messageBody.type === 'cancelCall'){
             _self.askAccept = false
@@ -209,8 +222,8 @@ export default {
           const users = eval('(' + msg.body + ')')
           const newUsernames =  _.map(users, 'username')
           const newNames =  _.map(users, 'name')
-          console.log(newNames)
-          if(_self.isLinked && !(_self.targetUsername in newUsernames)){
+          console.log(newUsernames)
+          if(_self.isLinked && newUsernames.indexOf(_self.targetUsername) === -1){
             await _self.hangUp()
             _self.isLinked = false
             _self.localStream.getVideoTracks()[0].stop()
