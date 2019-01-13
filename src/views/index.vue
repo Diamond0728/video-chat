@@ -20,7 +20,7 @@
         </v-list-tile-avatar>
         <v-list-tile-content>
           <v-list-tile-title v-html="names[index]"></v-list-tile-title>
-          <v-list-tile-title v-html="`ip地址：${username}`"></v-list-tile-title>
+          <v-list-tile-title v-html="`ip：${username}`"></v-list-tile-title>
         </v-list-tile-content>
         <v-list-tile-action>
           <v-icon color="success" @click="tryPhoneCall(username)">phone</v-icon>
